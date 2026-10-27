@@ -289,7 +289,7 @@ describe("makeTranscodingShellOperations", () => {
     if (enc) {
       expect(iconv.encodingExists(enc)).toBe(true);
       if (process.platform === "win32") {
-        expect(["GB18030", "Big5", "CP932", "CP949", "windows-1252", "cp437", "cp850", "cp852", "cp866", "windows-1250", "windows-1251", "windows-1254", "windows-1256"]).toContain(enc);
+        expect(["GB18030", "Big5", "CP932", "CP949", "windows-1252", "cp437", "cp850", "cp852", "cp866", "windows-1250", "windows-1251", "windows-1254", "windows-1256"].map(label => label.toUpperCase())).toContain(enc.toUpperCase());
       }
     }
   });

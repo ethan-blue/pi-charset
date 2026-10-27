@@ -407,6 +407,9 @@ export async function atomicReplace(
       );
     }
     if (lst.isFile()) {
+      // POSIX rename checks directory permissions, not the destination's write
+      // bit. Respect the existing file's access policy before replacing it.
+      await access(absPath, constants.W_OK);
       existingMode = lst.mode;
     }
   } catch (e) {

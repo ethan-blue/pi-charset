@@ -14,7 +14,7 @@ jobs:
         node: [22, 24]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install ripgrep (Linux)
         if: runner.os == 'Linux'
@@ -24,7 +24,7 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ripgrep -y
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm

@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 修复不可映射字符转义时误改合法问号的问题，改用编解码回环判断字符是否可表示。
 - Detect UTF-16 line endings at the character level, including characters whose bytes resemble CR or LF.
 - 按字符识别 UTF-16 换行，避免将普通字符中的字节误认成行尾。
+- Check destination write access before atomic replacement so read-only files remain protected on POSIX systems.
+- 原子替换前检查目标文件写权限，避免在 POSIX 系统上绕过只读保护。
 - Keep path keys case-sensitive outside Windows and reset classification caches when the extension reloads.
 - 非 Windows 平台保留路径大小写，扩展重载时一并清理编码判定缓存。
 - Load the optional ripgrep package through an ESM-compatible module loader; deduplicate search results only after validation.
