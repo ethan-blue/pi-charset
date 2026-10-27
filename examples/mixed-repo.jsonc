@@ -1,0 +1,6 @@
+// Multi-module mixed-encoding repository: UTF-8 by default, with a dedicated GBK legacy subdirectory.
+// If GBK and UTF-8 files coexist in the same directory, omit directory overrides and rely on per-file byte classification.
+{
+  "sourceEncoding": "UTF-8",
+  "overrides": [{ "pattern": "legacy-gbk/**", "encoding": "GBK" }]
+}

@@ -1,0 +1,22 @@
+// Legacy Java Web project configuration (Eclipse + Tomcat + SVN, GBK primary encoding).
+// Copy to the project root as .pi-charset.json and adjust overrides to match your directory layout.
+{
+  "sourceEncoding": "GBK",
+  "writeEncoding": "GBK",
+  "unmappable": "error",
+  "verifyWrite": true,
+  "protectUtf8": true,
+  "autoCandidates": ["GB18030", "GBK", "GB2312", "Big5"],
+  "overrides": [
+    { "pattern": "WebContent/Mobile/**", "encoding": "UTF-8" },
+    { "pattern": "conf/tplt/**", "encoding": "UTF-8" },
+    // Java .properties default to ISO-8859-1; single-byte encodings require force: true and escape non-ASCII to \uXXXX.
+    {
+      "pattern": "*.properties",
+      "encoding": "ISO-8859-1",
+      "force": true,
+      "writeEncoding": "ISO-8859-1",
+      "unmappable": "escape"
+    }
+  ]
+}

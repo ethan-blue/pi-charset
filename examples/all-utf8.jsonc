@@ -1,0 +1,5 @@
+// Pure UTF-8 repository configuration: preserves UTF-16 BOM, blocks binary writes, and verifies writes on read-back.
+{
+  "sourceEncoding": "UTF-8",
+  "writeEncoding": "UTF-8"
+}

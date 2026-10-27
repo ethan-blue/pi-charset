@@ -1,0 +1,6 @@
+node_modules/
+*.log
+.DS_Store
+
+# Generated test fixtures (built from test/fixtures/build.ts via npm run fixtures)
+test/fixtures/out/

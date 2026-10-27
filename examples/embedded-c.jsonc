@@ -1,0 +1,24 @@
+// Embedded C project configuration: .c and .h sources use GBK + CRLF; other files use UTF-8.
+// Copy to the project root as .pi-charset.json.
+{
+  "sourceEncoding": "UTF-8",
+  "writeEncoding": "UTF-8",
+  "unmappable": "error",
+  "verifyWrite": true,
+  "protectUtf8": true,
+  "transcodeBash": false,
+  "overrides": [
+    {
+      "pattern": "src/**/*.c",
+      "encoding": "GBK",
+      "writeEncoding": "GBK",
+      "newFileLineEnding": "CRLF"
+    },
+    {
+      "pattern": "src/**/*.h",
+      "encoding": "GBK",
+      "writeEncoding": "GBK",
+      "newFileLineEnding": "CRLF"
+    }
+  ]
+}
