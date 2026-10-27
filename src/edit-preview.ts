@@ -6,6 +6,7 @@ import { readFileSync, statSync } from "node:fs";
 import * as path from "node:path";
 import { configGeneration, findNearestConfigSync, resolveFileRule } from "./config";
 import { classifyBuffer } from "./encoding/classify";
+import { normalizePathKey } from "./path-key";
 import type { Component } from "@earendil-works/pi-tui";
 import { Box, Text, Spacer } from "@earendil-works/pi-tui";
 import {
@@ -94,7 +95,8 @@ export function isUtf8FileCached(absPath: string): boolean {
     return true;
   }
   const gen = configGeneration();
-  const cached = utf8Cache.get(absPath);
+  const key = normalizePathKey(absPath);
+  const cached = utf8Cache.get(key);
   if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size && cached.gen === gen)
     return cached.builtinPreviewIsSafe;
   let buf: Buffer;
@@ -117,7 +119,7 @@ export function isUtf8FileCached(absPath: string): boolean {
   );
   const safe =
     v.kind === "utf8" || v.kind === "utf8-bom" || v.kind === "ascii" || v.kind === "binary" || v.kind === "unknown";
-  utf8Cache.set(absPath, { mtimeMs: st.mtimeMs, size: st.size, gen, builtinPreviewIsSafe: safe });
+  utf8Cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, gen, builtinPreviewIsSafe: safe });
   if (utf8Cache.size > 512) {
     const firstKey = utf8Cache.keys().next().value;
     if (firstKey) utf8Cache.delete(firstKey);

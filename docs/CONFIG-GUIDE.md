@@ -29,7 +29,7 @@ node tools/scan-encoding.mjs D:/path/to/project --init
 When no `.pi-charset.json` is present up the directory tree, `pi-charset` operates in **zero-config self-adaptive mode**:
 - **Existing Files**: `read`, `write`, and `edit` classify each file by its bytes. Existing `GBK`, `GB18030`, `Big5`, `UTF-16`, and `UTF-8` files are decoded to UTF-8 on read and written back in their original encoding, line-ending style (`CRLF` or `LF`), and BOM, with all three write safety gates active.
 - **New & Pure-ASCII Files**: `pi-charset` scans up to 16 sibling files in the same directory (prioritizing the same file extension group such as `.c`/`.h`) and inherits the dominant encoding and line ending (defaulting to `UTF-8` if no CJK siblings exist).
-- **Multi-Encoding `grep`**: Non-ASCII search patterns automatically run across `UTF-8` and `GB18030` passes and deduplicate matches by `file:line`.
+- **Multi-Encoding `grep`**: Regex patterns and non-ASCII literals run across `UTF-8` and `GB18030` passes and deduplicate matches by `file:line`. ASCII-only regexes also need these passes: for example, `\p{Han}` matches Chinese characters despite containing only ASCII syntax.
 - `.pi-charset.json` is only needed when you want to override defaults (e.g., single-byte `ISO-8859-1` with `force: true`, explicit encoding migration, or enabling `transcodeBash`).
 
 ### 3. Configuration Reference
@@ -47,6 +47,14 @@ When no `.pi-charset.json` is present up the directory tree, `pi-charset` operat
 | `transcodeBash` | `false` | Shell output transcoding: `false` (disabled), `true` / `"auto"`, or an explicit encoding name (e.g., `"GBK"`). Requires restarting Pi when changed. |
 | `bashFileDump` | `true` | When `transcodeBash` is enabled, single-file dump commands (`type`, `cat`, `head`, `tail`, `Get-Content`) use the file's own read encoding. |
 | `overrides` | `[]` | Path-based glob override rules. |
+
+#### Choosing an unmappable-character policy
+
+Keep `error` for source files unless the project explicitly requires another policy. `escape` changes file contents permanently: an unsupported character becomes literal `\uXXXX` text (a surrogate pair for supplementary characters). Reads do not reverse these escapes. Whether the result has the intended meaning depends on the language and the exact string, comment, or identifier context; it is not a general-purpose repair for C, Java, JSON, or configuration files.
+
+`drop-to-gb18030` changes the output encoding for GB-family writes. Use it only if the compiler, editor, and downstream tools accept GB18030; it is not a way to keep a strict GBK requirement.
+
+Keep `verifyWrite: true` for normal use. Verification adds an in-memory conversion and a full disk read after writing, so large or frequently rewritten files incur additional I/O. Disabling it trades away verification, not just logging.
 
 #### 3.1 `overrides` Matching & Specificity
 
@@ -122,7 +130,7 @@ When no `.pi-charset.json` is present up the directory tree, `pi-charset` operat
 
 - **Gate 1 (Unmappable Characters)**: The file on disk is untouched. Either change `writeEncoding` to `"GB18030"` / `"UTF-8"`, set `unmappable` to `"escape"` or `"drop-to-gb18030"`, or replace the unmappable character.
 - **Gate 2 (Post-Write Verification Mismatch)**: The on-disk file is preserved as-is without rolling back to avoid clobbering concurrent external edits. Read the file again to inspect the current disk state before retrying.
-- **Gate 3 (Unknown or Lossy Conversion Blocked)**: Adjust `writeEncoding` to a superset encoding (such as `GB18030`), or set `"force": true` on the matching override rule if conversion is intentional.
+- **Gate 3 (Unknown or Lossy Conversion Blocked)**: Check the file's actual encoding and keep a version-controlled copy before changing rules. Choose a compatible target encoding if appropriate. `force: true` overrides detection; it does not repair damaged bytes or waive round-trip checks. Do not use it merely to silence an error.
 
 ---
 
@@ -151,7 +159,7 @@ node tools/scan-encoding.mjs D:/path/to/project --init
 当工作目录向上查找不到 `.pi-charset.json` 时，扩展默认运行在**零配置自适应模式**：
 - **已存在文件**：`read`、`write`、`edit` 直接根据文件自身字节判定编码。`GBK`、`GB18030`、`Big5`、`UTF-16` 与 `UTF-8` 文件在读取时自动解码为 UTF-8，在写入时自动保持原文件编码、原行尾（`CRLF` 或 `LF`）与 BOM，并默认启用全部三道写入门禁。
 - **新建文件与纯 ASCII 文件**：自动扫描同目录下最多 16 个相邻文件（优先匹配同语言后缀族，如 `.c`/`.h`），继承同目录的主流编码与行尾格式（同目录无传统编码文件时默认 `UTF-8`）。
-- **多编码搜索（`grep`）**：非 ASCII 搜索词自动执行 `UTF-8 + GB18030` 双趟搜索并按 `file:line` 去重。
+- **多编码搜索（`grep`）**：正则搜索或非 ASCII 字面量搜索执行 `UTF-8 + GB18030` 双趟搜索并按 `file:line` 去重。纯 ASCII 正则也需要分趟，例如 `\p{Han}` 虽然模式只含 ASCII，匹配的却是中文。
 - 仅在需要指定单字节编码（`ISO-8859-1` + `force: true`）、跨编码迁移或开启 `transcodeBash` 时，才需要创建 `.pi-charset.json`。
 
 ### 3. 配置字段参考
@@ -169,6 +177,14 @@ node tools/scan-encoding.mjs D:/path/to/project --init
 | `transcodeBash` | `false` | Shell 输出流转码：`false` 关闭；`true` 或 `"auto"` 自动判定并转 UTF-8；或指定具体编码名（如 `"GBK"`）。修改后需重启 Pi |
 | `bashFileDump` | `true` | 在 `transcodeBash` 开启时生效：`type`、`cat`、`head`、`tail`、`Get-Content` 读取单文件时直接采用该文件的读编码 |
 | `overrides` | `[]` | 按路径 glob 覆盖局部规则 |
+
+#### 不可映射字符策略怎么选
+
+源码文件建议保留 `error`。`escape` 会永久改变文件内容：不能表示的字符会变成字面的 `\uXXXX` 文本，补充平面字符使用代理对；后续读取不会自动反转义。语言是否识别这些转义，还取决于它位于字符串、注释还是标识符中，不能把它当作 C、Java、JSON 或配置文件的通用修复方案。
+
+`drop-to-gb18030` 会改变 GB 系文件的输出编码。只有编译器、编辑器及后续工具均接受 GB18030 时才适用；工程必须使用 GBK 时不要选它。
+
+日常使用建议保留 `verifyWrite: true`。校验会增加内存编解码和写后整文件回读，大文件或高频写入会有额外 I/O 成本。关闭它意味着放弃校验，而不只是关闭日志。
 
 #### 3.1 `overrides` 匹配与特异度规则
 
@@ -196,4 +212,4 @@ node tools/scan-encoding.mjs D:/path/to/project --init
 
 - **闸门 1（目标编码无法表示字符）**：此时磁盘文件未被修改。可将 `writeEncoding` 改为 `"GB18030"` 或 `"UTF-8"`，或将该规则 `unmappable` 设为 `"escape"` / `"drop-to-gb18030"`，或替换生僻字符后重试。
 - **闸门 2（写后回读校验不一致）**：磁盘保留最新现场，不执行旧备份回滚（避免覆盖外部编辑器或格式化工具写入的新内容）。先执行 `read` 查看当前文件内容，确认后再重试。
-- **闸门 3（未知编码或有损转码拦截）**：将目标 `writeEncoding` 调整为超集编码（如 `"GB18030"`），或在确认需要强制转换时为该规则设置 `"force": true`。
+- **闸门 3（未知编码或有损转码拦截）**：先核对文件真实编码，并保留版本管理中的原文件，再考虑调整为兼容的目标编码。`force: true` 用于覆盖编码判定，不会修复损坏字节，也不会跳过往返校验；不要为了消除报错直接开启它。

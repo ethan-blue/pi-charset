@@ -3,6 +3,7 @@
 // - Verifies matches against each file's classified encoding and deduplicates by file:line.
 import { spawn, spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Type, type Static } from "typebox";
@@ -62,13 +63,15 @@ function piAgentRg(): string | null {
   return null;
 }
 
+const esmRequire = createRequire(import.meta.url);
+
 function findRgFromVscode(): string | null {
   const dirs = ["@vscode/ripgrep"];
   if (process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, "npm", "node_modules", "@vscode", "ripgrep"));
   dirs.push(path.join(path.dirname(process.execPath), "node_modules", "@vscode", "ripgrep"));
   for (const dir of dirs) {
     try {
-      const { rgPath } = require(dir);
+      const { rgPath } = esmRequire(dir);
       if (rgPath) {
         accessSync(rgPath, constants.X_OK);
         return rgPath;
@@ -136,13 +139,15 @@ const GB_FAMILY = new Set(["GBK", "GB2312", "GB_2312", "HZ-GB-2312", "CP936", "W
 
 /**
  * Compute the list of encoding passes for a search pattern:
- * - Always run UTF-8 first; ASCII-only patterns require only the UTF-8 pass.
+ * - Always run UTF-8 first; ASCII-only literals can use just this pass.
+ * - Regex mode also runs legacy passes for ASCII patterns (Unicode classes and dots can match non-ASCII).
  * - In zero-config mode (`found === null`), non-ASCII patterns run `["UTF-8", "GB18030"]`.
  * - When a configuration file exists, collect declared multi-byte encodings and fold GB-family encodings into GB18030.
  */
-export function buildEncodingPasses(found: FoundConfig | null, pattern: string): string[] {
+export function buildEncodingPasses(found: FoundConfig | null, pattern: string, regex = false): string[] {
   const passes = ["UTF-8"];
-  if (/[^\x00-\x7f]/.test(pattern) === false) return passes;
+  // An ASCII regex can still match non-ASCII text (e.g. \\p{Han} or a dot).
+  if (!regex && /[^\x00-\x7f]/.test(pattern) === false) return passes;
   if (!found) {
     passes.push(GB_SUPERSET);
     return passes;
@@ -309,7 +314,7 @@ export async function searchFiles(rootAbs: string, input: GrepInput, signal?: Ab
   }
   const found = await findNearestConfig(isDir ? searchPath : path.dirname(searchPath));
 
-  const passes = buildEncodingPasses(found, input.pattern);
+  const passes = buildEncodingPasses(found, input.pattern, !input.literal);
   const effectiveLimit = Math.max(1, input.limit ?? DEFAULT_LIMIT);
   const collected: RawMatch[] = [];
   const seen = new Set<string>();
@@ -327,32 +332,33 @@ export async function searchFiles(rootAbs: string, input: GrepInput, signal?: Ab
     }
     return hit;
   };
-  const regexCache = new Map<string, RegExp | null>();
-  const patternHitsLine = (line: string): boolean => {
-    if (input.literal) {
-      return input.ignoreCase
-        ? line.toLowerCase().includes(input.pattern.toLowerCase())
-        : line.includes(input.pattern);
+  const isUtf16Or32 = (enc: string): boolean => {
+    try {
+      const norm = normalizeEncoding(enc).toUpperCase();
+      return norm.startsWith("UTF-16") || norm.startsWith("UTF-32");
+    } catch {
+      return false;
     }
-    const key = input.ignoreCase ? "i" : "";
-    let re = regexCache.get(key);
-    if (re === undefined) {
-      try {
-        re = new RegExp(input.pattern, key);
-      } catch {
-        re = null;
-      }
-      regexCache.set(key, re);
-    }
-    return re === null ? true : re.test(line);
   };
+
+  // Regex semantics belong to ripgrep. Never re-run arbitrary patterns in Node's
+  // backtracking engine: Rust syntax differs and a JS retry can block the host.
+  const literalHitsLine = (line: string): boolean => input.ignoreCase
+    ? line.toLowerCase().includes(input.pattern.toLowerCase())
+    : line.includes(input.pattern);
+
   /** Verify a match against the file's classified encoding to discard false-positive mojibake hits. */
   const trusted = (abs: string, m: RawMatch): boolean => {
     const v = classifyFileCached(abs, ruleContextFor(abs, found));
     if (v.kind === "binary" || v.kind === "unknown") return false;
     if (v.kind === "ascii" || sameDecodeFamily(v.encoding, m.encoding)) return true;
+    if (isUtf16Or32(v.encoding) || isUtf16Or32(m.encoding)) return false;
+
+    // Literal ASCII searches can safely reuse a byte-oriented UTF-8 pass, but
+    // only if the literal is also present in the correctly decoded source line.
+    // Regex matches from a mismatched encoding wait for their proper pass.
     const line = linesOf(abs)[m.line - 1];
-    return line !== undefined && patternHitsLine(line.replace(/\r/g, ""));
+    return !!input.literal && line !== undefined && literalHitsLine(line);
   };
 
   for (const enc of passes) {
@@ -370,9 +376,9 @@ export async function searchFiles(rootAbs: string, input: GrepInput, signal?: Ab
       const abs = path.resolve(searchPath, m.file);
       const key = `${abs}:${m.line}`;
       if (seen.has(key)) continue;
-      seen.add(key);
       m.encoding = enc;
       if (!trusted(abs, m)) continue;
+      seen.add(key);
       collected.push({ ...m, file: abs });
     }
   }
@@ -418,14 +424,15 @@ function formatLikeBuiltin(
   const outputLines: string[] = [];
   for (const m of matches) {
     const rel = formatPath(m.file);
-    if (contextValue === 0 && m.text !== undefined) {
-      const sanitized = m.text.replace(/\r\n/g, "\n").replace(/\r/g, "").replace(/\n$/, "");
+    const lines = readLines(m.file);
+    if (contextValue === 0) {
+      const lineText = lines[m.line - 1] ?? m.text ?? "";
+      const sanitized = lineText.replace(/\r\n/g, "\n").replace(/\r/g, "").replace(/\n$/, "");
       const { text: t, wasTruncated } = truncateLine(sanitized);
       if (wasTruncated) linesTruncated = true;
       outputLines.push(`${rel}:${m.line}: ${t}`);
       continue;
     }
-    const lines = readLines(m.file);
     if (!lines.length) {
       outputLines.push(`${rel}:${m.line}: (unable to read file)`);
       continue;

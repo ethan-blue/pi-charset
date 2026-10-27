@@ -157,12 +157,13 @@ describe("行尾保真与幂等性", () => {
     expect(iconv.decode(after, "GBK")).toContain("报警阈值=90.0");
   });
 
-  it("无配置目录 writeFile 原样透传行尾", async () => {
+  it("无配置目录同样拒写混合行尾，保留原字节", async () => {
     const p = join(root, "plain.txt");
     const content = "line1\r\nline2\n";
-    writeFileSync(p, Buffer.from(content, "utf-8"));
-    await makeWriteOperations().writeFile(p, content + "line3\r\n");
-    expect(readFileSync(p).equals(Buffer.from(content + "line3\r\n", "utf-8"))).toBe(true);
+    const original = Buffer.from(content, "utf-8");
+    writeFileSync(p, original);
+    await expect(makeWriteOperations().writeFile(p, content + "line3\r\n")).rejects.toThrow(/混合换行/);
+    expect(readFileSync(p)).toEqual(original);
   });
 });
 

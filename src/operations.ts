@@ -2,7 +2,7 @@
 // - Read: single-read buffer -> image binary guard -> read plan -> decode to UTF-8 -> record SHA-1 baseline fingerprint.
 // - Write: single pre-write disk read -> write plan & Gate 3 -> Gate 1 (unmappable code points) -> line-ending & BOM restoration
 //          -> pre-write round-trip check -> SHA-1 baseline conflict check -> atomic replace -> Gate 2 (post-write read-back).
-import { readFile, mkdir, access, rename, unlink, open, stat } from "node:fs/promises";
+import { readFile, mkdir, access, rename, unlink, open, stat, lstat } from "node:fs/promises";
 import { constants } from "node:fs";
 import * as path from "node:path";
 import { randomBytes, createHash } from "node:crypto";
@@ -13,6 +13,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { clearConfigCache, CONFIG_FILENAME, type ResolvedConfig } from "./config";
 import { resolveReadPlan, resolveWritePlan, type WritePlan } from "./resolve";
+import { normalizePathKey } from "./path-key";
 import {
   canEncodeAll,
   charListMessage,
@@ -20,6 +21,7 @@ import {
   encodeFromUtf8,
   escapeUnmappable,
   isGBEncoding,
+  isWellFormed,
   normalizeEncoding,
   unmappableChars,
 } from "./encoding/converter";
@@ -41,14 +43,23 @@ const BOM_BYTES = {
   utf16be: Buffer.from([0xfe, 0xff]),
 } as const;
 
-/** SHA-1 fingerprint recorded when a file is read, checked before writes to detect external edits. */
+/**
+ * SHA-1 fingerprint recorded when a file is read, checked before writes to detect external edits.
+ * Entries hold a normalized path and a 40-character SHA-1; memory grows with files read in the session.
+ * Session start and extension reload clear the map. Do not silently evict entries:
+ * that would discard external-modification conflict detection for previously read files.
+ */
 const readBaselines = new Map<string, string>();
+
+function recordBaseline(key: string, hash: string): void {
+  readBaselines.set(key, hash);
+}
 
 export function clearReadBaselines(): void {
   readBaselines.clear();
 }
 
-const baselineKey = (absPath: string) => path.resolve(absPath).toLowerCase();
+const baselineKey = (absPath: string) => normalizePathKey(absPath);
 const sha1 = (buf: Buffer) => createHash("sha1").update(buf).digest("hex");
 
 function mixedLineEndingError(absPath: string): Error {
@@ -67,8 +78,8 @@ async function readAsUtf8Buffer(absPath: string, opts?: { forEdit?: boolean }): 
   for (const w of plan.warnings) pushEncodingNote(absPath, w);
   if (plan.verdict.kind === "binary") return raw;
   // Reject mixed line endings during edit's read phase before built-in edit normalizes line endings.
-  if (opts?.forEdit && plan.transcoded && detectLineEndingKind(raw) === "MIXED") throw mixedLineEndingError(absPath);
-  readBaselines.set(baselineKey(absPath), sha1(raw));
+  if (opts?.forEdit && detectLineEndingKind(raw, plan.encoding) === "MIXED") throw mixedLineEndingError(absPath);
+  recordBaseline(baselineKey(absPath), sha1(raw));
   if (plan.encoding === "UTF-8" || plan.encoding === "BINARY" || plan.encoding === "UNKNOWN") {
     return plan.note ? Buffer.concat([raw, Buffer.from(`\n\n${plan.note}\n`, "utf-8")]) : raw;
   }
@@ -81,11 +92,16 @@ function isNotFound(e: unknown): boolean {
   return (e as { code?: string })?.code === "ENOENT";
 }
 
-/** Read the target file once prior to writing (returns null if the file does not exist yet). */
+/** Read the target file once prior to writing (returns null if the file does not exist yet). Rejects symlinks. */
 async function readExistingOrNull(absPath: string): Promise<Buffer | null> {
   try {
-    const st = await stat(absPath);
-    if (!st.isFile()) return null;
+    const lst = await lstat(absPath);
+    if (lst.isSymbolicLink()) {
+      throw new Error(
+        `拒写 ${absPath}：该路径为符号链接（symlink）。为防止替换符号链接本身或引发安全竞态，已拒绝写入。请直接对目标文件进行修改。`,
+      );
+    }
+    if (!lst.isFile()) return null;
     return await readFile(absPath);
   } catch (e) {
     if (isNotFound(e)) return null;
@@ -96,13 +112,26 @@ async function readExistingOrNull(absPath: string): Promise<Buffer | null> {
 function gate1Message(absPath: string, bad: string[], enc: string, strategy: string): string {
   const list = charListMessage(bad.slice(0, 12));
   const more = bad.length > 12 ? `…共 ${bad.length} 个不同字符` : "";
+  const isGb = isGBEncoding(enc);
+  const isGb18030 = normalizeEncoding(enc) === "GB18030";
+
+  let suggestion: string;
+  if (isGb && !isGb18030) {
+    suggestion = `建议将该目录或 pattern 的 "writeEncoding" 改为 "GB18030"（GBK 超集，原 GBK 字节保持不变）或 "UTF-8"。`;
+  } else if (isGb18030) {
+    suggestion = `建议将 "writeEncoding" 改为 "UTF-8"。`;
+  } else {
+    suggestion = `建议将 "writeEncoding" 改为可覆盖上述码点的编码（如 UTF-8 或 GB18030）。`;
+  }
+
+  const stratOptions =
+    isGb && !isGb18030
+      ? `（当前 unmappable="${strategy}"；也可设为 "escape" 转为 \\uXXXX，或设为 "drop-to-gb18030" 自动升为 GB18030）`
+      : `（当前 unmappable="${strategy}"；也可设为 "escape" 转为 \\uXXXX）`;
+
   return (
     `闸门 1 拒写 ${absPath}：目标编码 ${enc} 无法表示以下内容（写出将变为 '?'）：` +
-    `${list}${more}。` +
-    (isGBEncoding(enc)
-      ? `建议将该目录或 pattern 的 "writeEncoding" 改为 "GB18030"（GBK 超集，原 GBK 字节保持不变）。`
-      : `建议将 "writeEncoding" 改为可覆盖上述码点的编码（如 UTF-8 或 GB18030）。`) +
-    `（当前 unmappable="${strategy}"；也可设为 "escape" 转为 \\uXXXX，或设为 "drop-to-gb18030" 自动升为 GB18030）`
+    `${list}${more}。${suggestion}${stratOptions}`
   );
 }
 
@@ -150,24 +179,39 @@ function encodeForWrite(
 ): { bytes: Buffer; text: string; bomLen: number } {
   // Strip any leading U+FEFF from the text body and restore BOM at the byte level via plan.addBom.
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  const upper = encoding.toUpperCase();
-  if (upper === "UTF-8") {
-    const bom = plan.addBom === "utf8" ? BOM_BYTES.utf8 : Buffer.alloc(0);
-    const bodyBytes = Buffer.from(body, "utf-8");
-    if (bodyBytes.toString("utf-8") !== body) {
-      throw new Error(
-        `拒写 ${absPath}：内容含孤立 UTF-16 代理项，UTF-8 编码会产生 U+FFFD，已拒绝落盘。`,
-      );
-    }
-    return { bytes: Buffer.concat([bom, bodyBytes]), text: body, bomLen: bom.length };
-  }
-  const kind: LineEndingKind | null = prevRaw === null ? null : detectLineEndingKind(prevRaw);
+
+  // Unified line ending handling across all encodings
+  const kind: LineEndingKind | null =
+    prevRaw === null ? null : detectLineEndingKind(prevRaw, plan.verdict?.encoding ?? encoding);
   if (kind === "MIXED") throw mixedLineEndingError(absPath);
   let restored = body;
   if (kind === "CRLF" || kind === "LF") {
     restored = restoreLineEndings(body, kind);
   } else if (kind === null && plan.rule?.newFileLineEnding) {
     restored = restoreLineEndings(body, plan.rule.newFileLineEnding);
+  }
+
+  const upper = encoding.toUpperCase();
+  if (upper === "UTF-8") {
+    const bom = plan.addBom === "utf8" ? BOM_BYTES.utf8 : Buffer.alloc(0);
+    if (!isWellFormed(restored)) {
+      throw new Error(
+        `拒写 ${absPath}：内容含孤立 UTF-16 代理项，UTF-8 编码会产生 U+FFFD，已拒绝落盘。`,
+      );
+    }
+    const bodyBytes = Buffer.from(restored, "utf-8");
+    if (bodyBytes.toString("utf-8") !== restored) {
+      throw new Error(
+        `拒写 ${absPath}：内容含孤立 UTF-16 代理项，UTF-8 编码会产生 U+FFFD，已拒绝落盘。`,
+      );
+    }
+    return { bytes: Buffer.concat([bom, bodyBytes]), text: restored, bomLen: bom.length };
+  }
+
+  if (!isWellFormed(restored)) {
+    throw new Error(
+      `拒写 ${absPath}：内容含孤立 UTF-16 代理项，已拒绝落盘。`,
+    );
   }
   const bytes = encodeFromUtf8(restored, encoding);
   const bom =
@@ -233,7 +277,7 @@ function firstDiffIndex(a: string, b: string): number {
 }
 
 export interface WriteSeam {
-  writeBytes: (absPath: string, bytes: Buffer) => Promise<void>;
+  writeBytes: (absPath: string, bytes: Buffer, expectedPrevRaw?: Buffer | null) => Promise<void>;
 }
 
 export const defaultWriteSeam: WriteSeam = { writeBytes: atomicReplace };
@@ -258,17 +302,24 @@ async function writeEncodedLocked(
   const { bytes, text, bomLen } = encodeForWrite(plan, g1.encoding, g1.text, absPath, prevRaw);
 
   const remembered = readBaselines.get(baselineKey(absPath));
-  if (remembered !== undefined && prevRaw !== null && sha1(prevRaw) !== remembered) {
-    throw new Error(
-      `拒写 ${absPath}：文件自上次读取后已被外部修改（磁盘内容与读取基线不一致）。` +
-        `请重新读取该文件后再修改。`,
-    );
+  if (remembered !== undefined) {
+    if (prevRaw === null) {
+      throw new Error(
+        `拒写 ${absPath}：文件自上次读取后已被外部删除。请重新确认后再操作。`,
+      );
+    }
+    if (sha1(prevRaw) !== remembered) {
+      throw new Error(
+        `拒写 ${absPath}：文件自上次读取后已被外部修改（磁盘内容与读取基线不一致）。` +
+          `请重新读取该文件后再修改。`,
+      );
+    }
   }
 
   const verify = plan.rule?.verifyWrite !== false;
   const existed = prevRaw !== null;
   try {
-    await seam.writeBytes(absPath, bytes);
+    await seam.writeBytes(absPath, bytes, prevRaw);
   } catch (e) {
     throw new Error(
       `写入 ${absPath} 失败：${(e as Error).message}。磁盘当前状态未验证，请重新读取确认后再重试。` +
@@ -281,7 +332,7 @@ async function writeEncodedLocked(
       throw new Error(
         `闸门 2（写后自校验）失败：${problem}。` +
           (existed
-            ? `磁盘内容与本次写入不一致（可能被其它进程改写，外部修改冲突），已保留磁盘现状（未回滚、未覆盖）；请重新读取后决定。`
+            ? `磁盘内容与本次写入不一致（可能被其它进程改写，外部修改冲突），已保留磁盘现状（未回滚）；请重新读取后决定。`
             : `文件写前不存在，已保留写出的内容供检查（未删除）；请读取核对后决定。`) +
           `${g1.note ? `（${g1.note}）` : ""}`,
       );
@@ -292,8 +343,9 @@ async function writeEncodedLocked(
 
 function afterWrite(absPath: string, written: Buffer | null): void {
   invalidateClassifyCache(absPath);
-  if (written === null) readBaselines.delete(baselineKey(absPath));
-  else readBaselines.set(baselineKey(absPath), sha1(written));
+  const k = baselineKey(absPath);
+  if (written === null) readBaselines.delete(k);
+  else recordBaseline(k, sha1(written));
   if (path.basename(absPath) === CONFIG_FILENAME) {
     clearConfigCache();
   }
@@ -331,40 +383,83 @@ function isTransientLockError(e: unknown): boolean {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Atomic file replacement via same-directory temp file + fsync + rename with Windows transient-lock retries. */
-export async function atomicReplace(absPath: string, bytes: Buffer): Promise<void> {
-  const tmp = `${absPath}.${randomBytes(6).toString("hex")}.pi-charset.tmp`;
-  const fh = await open(tmp, "w");
+/**
+ * Atomic file replacement via same-directory temp file + fsync + rename with Windows transient-lock retries.
+ * Rejects symbolic links explicitly to prevent replacing symlink targets or race vulnerabilities.
+ * Preserves existing POSIX file permissions/mode.
+ *
+ * TOCTOU note:
+ * When expectedPrevRaw is provided, destination state is re-checked immediately before rename.
+ * Standard OS filesystem rename cannot perform cross-process atomic CAS without specialized platform
+ * locks; this re-check minimizes the TOCTOU race window but cannot guarantee absolute elimination.
+ */
+export async function atomicReplace(
+  absPath: string,
+  bytes: Buffer,
+  expectedPrevRaw?: Buffer | null,
+): Promise<void> {
+  let existingMode: number | undefined;
   try {
-    await fh.writeFile(bytes);
-    await fh.sync();
-  } finally {
-    await fh.close();
+    const lst = await lstat(absPath);
+    if (lst.isSymbolicLink()) {
+      throw new Error(
+        `拒写 ${absPath}：该路径为符号链接（symlink）。为防止替换符号链接本身或引发安全竞态，已拒绝写入。请直接对目标文件进行修改。`,
+      );
+    }
+    if (lst.isFile()) {
+      existingMode = lst.mode;
+    }
+  } catch (e) {
+    if (!isNotFound(e)) throw e;
   }
-  for (let i = 0; ; i++) {
+
+  const tmp = `${absPath}.${randomBytes(6).toString("hex")}.pi-charset.tmp`;
+  const openMode = existingMode !== undefined ? existingMode & 0o777 : undefined;
+  // Exclusive creation avoids following an unexpected existing temporary path.
+  const fh = await open(tmp, "wx", openMode);
+  try {
     try {
-      await rename(tmp, absPath);
-      return;
-    } catch (e) {
-      await unlink(tmp).catch(() => undefined);
-      if (i >= RENAME_RETRY_MS.length - 1 || !isTransientLockError(e)) throw e;
-      await sleep(RENAME_RETRY_MS[i]);
-      const again = await open(tmp, "w");
+      await fh.writeFile(bytes);
+      if (existingMode !== undefined) await fh.chmod(existingMode & 0o7777);
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+
+    for (let i = 0; ; i++) {
+      // Recheck on every attempt, including after a Windows lock retry. This is
+      // conflict detection, not a cross-process compare-and-swap guarantee.
+      if (expectedPrevRaw !== undefined) {
+        const current = await readExistingOrNull(absPath);
+        const mismatch = expectedPrevRaw === null
+          ? current !== null
+          : current === null || !current.equals(expectedPrevRaw);
+        if (mismatch) {
+          throw new Error(
+            `拒写 ${absPath}：落盘前复核发现文件已被外部进程修改或删除。请重新读取确认后再操作。`,
+          );
+        }
+      }
       try {
-        await again.writeFile(bytes);
-        await again.sync();
-      } finally {
-        await again.close();
+        await rename(tmp, absPath);
+        return;
+      } catch (e) {
+        if (i >= RENAME_RETRY_MS.length - 1 || !isTransientLockError(e)) throw e;
+        // Keep the already-written temporary file rather than rewriting it.
+        await sleep(RENAME_RETRY_MS[i + 1]);
       }
     }
+  } finally {
+    // Covers write/chmod/fsync/close failures as well as recheck/rename failures.
+    await unlink(tmp).catch(() => undefined);
   }
 }
 
 const pathLocks = new Map<string, Promise<void>>();
 
-/** Serialize async operations targeting the same case-insensitive file path. */
+/** Serialize async operations targeting the same file path (case-folded on Windows, case-sensitive on POSIX). */
 export async function withPathLock<T>(absPath: string, fn: () => Promise<T>): Promise<T> {
-  const k = path.resolve(absPath).toLowerCase();
+  const k = normalizePathKey(absPath);
   const tail = pathLocks.get(k) ?? Promise.resolve();
   const run = tail.then(fn, fn);
   const guard = run.then(

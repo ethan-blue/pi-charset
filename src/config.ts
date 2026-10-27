@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import micromatch from "micromatch";
+import { normalizePathKey } from "./path-key";
 import {
   UnsupportedEncodingError,
   isGBEncoding,
@@ -323,10 +324,11 @@ export function inferAdaptiveRule(absFilePath: string, rawBytes?: Buffer | null)
 }
 
 function loadConfigInDirSync(dir: string): CacheEntry | null {
-  const cached = dirCache.get(dir);
+  const cKey = normalizePathKey(dir);
+  const cached = dirCache.get(cKey);
   const found = resolveConfigPathSync(dir);
   if (!found) {
-    dirCache.set(dir, null);
+    dirCache.set(cKey, null);
     return null;
   }
   const { path: p, stat: st } = found;
@@ -335,7 +337,7 @@ function loadConfigInDirSync(dir: string): CacheEntry | null {
   try {
     text = readFileSync(p, "utf-8");
   } catch {
-    dirCache.set(dir, null);
+    dirCache.set(cKey, null);
     return null;
   }
   let parsed: unknown;
@@ -349,12 +351,12 @@ function loadConfigInDirSync(dir: string): CacheEntry | null {
       mtimeMs: st.mtimeMs,
       size: st.size,
     };
-    dirCache.set(dir, entry);
+    dirCache.set(cKey, entry);
     return entry;
   }
   const { config, warnings } = validateConfig((parsed ?? {}) as Record<string, unknown>, p);
   const entry: CacheEntry = { config, configPath: p, warnings, mtimeMs: st.mtimeMs, size: st.size };
-  dirCache.set(dir, entry);
+  dirCache.set(cKey, entry);
   return entry;
 }
 
@@ -531,10 +533,11 @@ function validateConfig(parsed: Record<string, unknown>, where: string): { confi
 }
 
 async function loadConfigInDir(dir: string): Promise<CacheEntry | null> {
-  const cached = dirCache.get(dir);
+  const cKey = normalizePathKey(dir);
+  const cached = dirCache.get(cKey);
   const found = await resolveConfigPath(dir);
   if (!found) {
-    dirCache.set(dir, null);
+    dirCache.set(cKey, null);
     return null;
   }
   const { path: p, stat: st } = found;
@@ -543,7 +546,7 @@ async function loadConfigInDir(dir: string): Promise<CacheEntry | null> {
   try {
     text = await readFile(p, "utf-8");
   } catch {
-    dirCache.set(dir, null);
+    dirCache.set(cKey, null);
     return null;
   }
   let parsed: unknown;
@@ -558,12 +561,12 @@ async function loadConfigInDir(dir: string): Promise<CacheEntry | null> {
       mtimeMs: st.mtimeMs,
       size: st.size,
     };
-    dirCache.set(dir, entry);
+    dirCache.set(cKey, entry);
     return entry;
   }
   const { config, warnings } = validateConfig((parsed ?? {}) as Record<string, unknown>, p);
   const entry: CacheEntry = { config, configPath: p, warnings, mtimeMs: st.mtimeMs, size: st.size };
-  dirCache.set(dir, entry);
+  dirCache.set(cKey, entry);
   return entry;
 }
 

@@ -28,7 +28,7 @@ pi install git:github.com/ethan-blue/pi-charset -l
 pi install git:github.com/ethan-blue/pi-charset
 
 # Pin a specific release tag
-pi install git:github.com/ethan-blue/pi-charset@v0.1.0 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.1 -l
 ```
 
 When installing from a `git:` source, Pi clones the repository under `.pi/git/github.com/ethan-blue/pi-charset` (or `~/.pi/agent/git/...`) and runs `npm install` automatically.
@@ -73,7 +73,7 @@ Restart Pi after creating `.pi-charset.json`.
 
 ### 4. Post-Install Verification
 
-1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.0` and the active `.pi-charset.json` path.
+1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.1` and the active `.pi-charset.json` path.
 2. Edit a Chinese comment in a GBK file, then run `node <PKG_DIR>/tools/scan-encoding.mjs <file>` and verify the file remains `cjk/GBK`.
 3. Optionally scan for pre-existing damaged files (`U+FFFD` or `锟斤拷`):
    ```powershell
@@ -106,7 +106,7 @@ pi install git:github.com/ethan-blue/pi-charset -l
 pi install git:github.com/ethan-blue/pi-charset
 
 # 指定版本 tag 安装
-pi install git:github.com/ethan-blue/pi-charset@v0.1.0 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.1 -l
 ```
 
 使用 `git:` 源安装时，Pi 会将仓库克隆至 `.pi/git/github.com/ethan-blue/pi-charset`（或 `~/.pi/agent/git/...`）并自动执行 `npm install`。
@@ -151,7 +151,7 @@ node <PKG_DIR>/tools/scan-encoding.mjs . --init
 
 ### 4. 安装后验证
 
-1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.0` 及生效的 `.pi-charset.json` 路径。
+1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.1` 及生效的 `.pi-charset.json` 路径。
 2. **读写验证**：修改工程内一个 GBK 文件的中文注释，执行 `node <PKG_DIR>/tools/scan-encoding.mjs <文件路径>`，确认编码仍为 `cjk/GBK`。
 3. **历史受损文件排查（可选）**：
    ```powershell

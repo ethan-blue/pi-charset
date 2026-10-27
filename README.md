@@ -1,6 +1,6 @@
 # pi-charset
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](./package.json)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen.svg)](./package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
@@ -16,6 +16,14 @@ Encoding-aware `read`, `write`, `edit`, and `grep` extension for [Pi](https://gi
 ### Overview
 
 `pi-charset` intercepts file I/O and search operations in Pi to handle repositories that mix `GBK`, `GB18030`, `Big5`, `Shift_JIS`, `EUC-KR`, `ISO-8859-1`, `UTF-16`, and `UTF-8` files within the same workspace. All classification and transcoding run in-process without external Python or `chardet` subprocesses.
+
+### Working with a GBK project
+
+For an existing GBK project, start with the scanner's `--init --dry-run` command below and review the suggested rules before generating a configuration. Keep `unmappable: "error"` and `verifyWrite: true`: characters that GBK cannot represent should stop a write rather than turn into `?`.
+
+Use Pi's `read`, `edit`, and `write` tools for source changes. Shell redirection and external formatters bypass this extension. After installation, run `/charset-status`, edit a small tracked file, and inspect the diff in your usual editor before wider use.
+
+Byte detection is not proof of an encoding: GBK and GB18030 overlap, and some bytes also decode under other encodings. For a project that requires GBK, declare GBK explicitly instead of relying on inference, especially for new or ASCII-only files. This extension prevents new encoding damage; it cannot reconstruct text that was already saved as question marks or mojibake.
 
 ### Architecture
 
@@ -44,7 +52,7 @@ Files are classified in memory in a fixed order:
 `pi-charset` works out-of-the-box without requiring a `.pi-charset.json` file:
 - **Existing Files**: Automatically read in their byte-classified encoding (`GBK`, `GB18030`, `Big5`, `UTF-16`, `UTF-8`) and written back preserving their original encoding, line endings (`CRLF` or `LF`), and BOM.
 - **New & Pure-ASCII Files**: When no `.pi-charset.json` is present, `pi-charset` inspects sibling files in the same directory (matching extension group first, e.g. `.c`/`.h`) and inherits the dominant encoding and line-ending style (defaulting to `UTF-8` when siblings are UTF-8 or ASCII).
-- **Multi-Encoding Search (`grep`)**: Non-ASCII patterns automatically run `UTF-8 + GB18030` `ripgrep` passes in zero-config mode, or all configured encodings when `.pi-charset.json` is present. Matches are verified against each file's classified encoding and deduplicated by `file:line`.
+- **Multi-Encoding Search (`grep`)**: Regex patterns and non-ASCII literals run `UTF-8 + GB18030` `ripgrep` passes in zero-config mode, or the configured candidate encodings when `.pi-charset.json` is present. Matches are verified against each file's classified encoding and deduplicated by `file:line`.
 
 ### Quick Start
 
@@ -112,6 +120,8 @@ Run inside a Pi session:
 | Shell output redirection (`echo >`, `Set-Content`) | No | Bypasses file tools; use `write` or `edit` instead |
 | CLI startup `@file` arguments | No | Read by the host before extensions load |
 
+Atomic replacement avoids partially written files, but it is not a cross-process transaction or lock. Avoid editing the same file concurrently with external tools. Writes to symbolic links are rejected; edit the target file directly. Existing permission modes are retained, but ownership, ACLs, extended attributes, hard-link relationships, and crash durability are not guaranteed by this replacement scheme.
+
 ### Documentation
 
 - [Installation Guide](./docs/INSTALL.md)
@@ -127,6 +137,14 @@ Run inside a Pi session:
 ### 简介
 
 `pi-charset` 在 Pi 的工具 I/O 层接管 `read`、`write`、`edit` 与 `grep`，用于支持同一工程内混合存在 `GBK`、`GB18030`、`Big5`、`Shift_JIS`、`EUC-KR`、`ISO-8859-1`、`UTF-16` 与 `UTF-8` 文件的按文件读写与多编码搜索。全链路在进程内基于字节特征判定，不调用 Python 或外部探测子进程。
+
+### GBK 工程怎么用
+
+已有 GBK 工程，建议先运行下方扫描命令的 `--init --dry-run`，确认建议的目录规则后再生成配置。保留 `unmappable: "error"` 和 `verifyWrite: true`：GBK 放不下的字符应该报错，而不是悄悄变成问号。
+
+修改源码时使用 Pi 的 `read`、`edit`、`write` 工具。Shell 重定向和外部格式化工具不经过本扩展。安装后先用 `/charset-status` 查看状态，试改一个已纳入版本管理的小文件，再用常用编辑器核对差异。
+
+字节判定不能证明文件的原始编码。GBK 与 GB18030 存在重叠，同一串字节也可能符合其他编码；工程明确要求 GBK 时，应显式配置 GBK，尤其是新建文件和纯 ASCII 文件。本扩展用于防止新增乱码，不能恢复已经保存为问号或错误文本的原始内容。
 
 ### 工作机制
 
@@ -155,7 +173,7 @@ Run inside a Pi session:
 `pi-charset` 安装后无需编写 `.pi-charset.json` 即可直接工作：
 - **已存在文件**：读取时按文件自身字节判定出的编码（`GBK`、`GB18030`、`Big5`、`UTF-16`、`UTF-8`）解码；写入时自动保持原文件编码、原有行尾（`CRLF` 或 `LF`）与 BOM。
 - **新建文件与纯 ASCII 文件加中文**：未放置 `.pi-charset.json` 时，自动扫描同目录下的相邻源码文件（优先匹配同语言后缀族，如 `.c`/`.h`），继承该目录的主流编码与行尾格式（同目录为 UTF-8 或空目录时默认 `UTF-8`）。
-- **多编码搜索（`grep`）**：搜索词含非 ASCII 字符时，零配置下自动执行 `UTF-8 + GB18030` 双趟 `ripgrep` 搜索（有 `.pi-charset.json` 时按配置编码集合分趟），经逐文件字节判定复核后按 `file:line` 去重。
+- **多编码搜索（`grep`）**：正则搜索或非 ASCII 字面量搜索时，零配置下执行 `UTF-8 + GB18030` 双趟 `ripgrep` 搜索（有 `.pi-charset.json` 时按配置候选编码集合分趟），经逐文件字节判定复核后按 `file:line` 去重。
 
 ### 快速开始
 
@@ -223,6 +241,8 @@ node tools/scan-encoding.mjs /path/to/project --init
 | Shell 重定向写文件（如 `echo >`、`Set-Content`） | 否 | 不经过文件工具层，请使用 `write` 或 `edit` 工具写文件 |
 | 启动命令行 `@file` 参数 | 否 | 在扩展加载前由宿主直接读取 |
 
+原子替换用于避免文件只写了一半，不等于跨进程事务或文件锁。请避免与外部工具同时修改同一文件。符号链接拒绝写入，请直接修改目标文件。替换时保留已有权限模式，但不保证保留所有者、ACL、扩展属性、硬链接关系，也不保证掉电后的持久性。
+
 ### 文档索引
 
 - [安装说明 (INSTALL.md)](./docs/INSTALL.md)
@@ -237,7 +257,7 @@ node tools/scan-encoding.mjs /path/to/project --init
 
 ```bash
 npm run typecheck    # TypeScript type checking (tsc --noEmit)
-npm test             # Run Vitest suite (20 test files / 264 tests)
+npm test             # Run Vitest; use its summary for current pass/skip counts
 npm run verify       # Run typecheck + test
 ```
 

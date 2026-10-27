@@ -160,7 +160,7 @@ export async function resolveWritePlan(
       addBom: "",
       reject:
         `拒绝写入 ${absFilePath}：文件前 8192 字节内含 NUL，判定为二进制（binary）。` +
-        `若确认为文本文件，请在配置中为该 pattern 设置 "force": true 后重试。`,
+        `若确为文本文件（如含 NUL 的多字节编码如 UTF-16/32），请核对编码并为文本添加对应 BOM（如 UTF-16LE/BE BOM），或通过编辑器将其另存为受支持的带 BOM 文本后再操作。`,
       warnings,
       transcoding: false,
     };

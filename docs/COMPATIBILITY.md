@@ -10,13 +10,16 @@
 
 `package.json` declares `peerDependencies` for `@earendil-works/pi-coding-agent >= 0.84.0`. The table below lists verified host environments:
 
-| Environment | `pi-coding-agent` / `pi-ai` / `pi-tui` / `pi-agent-core` | Typecheck | Full Test Suite (264 tests) | Extension Loader (`discoverAndLoadExtensions`) | CLI Smoke (`pi --mode rpc`) |
+| Environment | Host version | Typecheck | Full Test Suite | Extension Loader (`discoverAndLoadExtensions`) | CLI Smoke (`pi --mode rpc`) |
 |---|---|---|---|---|---|
-| Repository Lockfile (`npm ci`) | `0.84.3` | PASS | PASS | PASS | — |
+| v0.1.1 lockfile, Windows / Node 24.18.0 | `1.4.0` | PASS | 270 passed, 2 POSIX-only tests skipped | PASS | — |
+| Historical v0.1.0 lockfile | `0.84.3` | PASS | PASS | PASS | — |
 | Local Host Junction | `1.2.0` / `1.2.0` / `1.2.0` / `1.2.0` | PASS | PASS | PASS | PASS |
 | Clean Tarball Unpack | `1.4.0` | — | — | PASS | — |
 
-Verified OS environment: Windows 11 (`10.0.26200`), Node.js `v24.11.1`, ripgrep `14.1.1`.
+The v0.1.1 row was verified on Windows with Node.js `v24.18.0`. Other rows are historical results and were not repeated for this patch. See GitHub Actions for current Windows/Linux and Node 22/24 results.
+
+The root `overrides` entry keeps the checkout's host dependency on a patched `undici`. npm ignores dependency-package overrides when this extension is installed into another application: update and audit your actual Pi installation separately.
 
 ### 2. Cross-Version API Adaptations (`0.84.3` vs `1.2.0`)
 
@@ -68,13 +71,16 @@ pi --mode rpc -e D:/tmp/pi-host-check/src/index.ts --no-mcp --no-session < NUL
 
 `package.json` 中 `peerDependencies` 声明 `@earendil-works/pi-coding-agent >= 0.84.0`。已完成实测的宿主版本如下：
 
-| 测试环境 | `pi-coding-agent` / `pi-ai` / `pi-tui` / `pi-agent-core` | 类型检查 | 全量测试 (264 项) | 扩展加载器 (`discoverAndLoadExtensions`) | CLI 冒烟 (`pi --mode rpc`) |
+| 测试环境 | 宿主版本 | 类型检查 | 全量测试 | 扩展加载器 (`discoverAndLoadExtensions`) | CLI 冒烟 (`pi --mode rpc`) |
 |---|---|---|---|---|---|
-| 仓库锁文件环境 (`npm ci`) | `0.84.3` | PASS | PASS | PASS | — |
+| v0.1.1 锁文件，Windows / Node 24.18.0 | `1.4.0` | PASS | 270 项通过，2 项 POSIX 测试跳过 | PASS | — |
+| v0.1.0 历史锁文件 | `0.84.3` | PASS | PASS | PASS | — |
 | 本机宿主环境 (Junction) | `1.2.0` / `1.2.0` / `1.2.0` / `1.2.0` | PASS | PASS | PASS | PASS |
 | 干净目录打包加载 | `1.4.0` | — | — | PASS | — |
 
-实测系统环境：Windows 11 (`10.0.26200`)，Node.js `v24.11.1`，ripgrep `14.1.1`。
+表中的 v0.1.1 记录来自本次 Windows / Node.js `v24.18.0` 验证，其余记录为历史结果，本补丁未逐一重跑。Windows/Linux、Node 22/24 的当前结果请查看 GitHub Actions。
+
+根项目中的 `overrides` 用于将本仓库测试环境的 `undici` 更新到已修复版本。扩展安装进其他应用时，npm 不会采用依赖包内的 overrides；实际运行 Pi 的环境仍需单独升级和审计。
 
 ### 2. 跨版本接口适配点（`0.84.3` 与 `1.2.0`）
 

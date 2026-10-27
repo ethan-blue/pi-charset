@@ -141,22 +141,55 @@ export function encodeFromUtf8(text: string, encoding: string): Buffer {
   return iconv.encode(text, encoding);
 }
 
-/** Fast check for whether all code points in text can be losslessly represented in the target encoding. */
+/** Check whether a string contains only well-formed Unicode (rejecting lone UTF-16 surrogates). */
+export function isWellFormed(s: string): boolean {
+  if (typeof (s as unknown as { isWellFormed?: () => boolean }).isWellFormed === "function") {
+    return (s as unknown as { isWellFormed: () => boolean }).isWellFormed();
+  }
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      if (i + 1 >= s.length) return false;
+      const next = s.charCodeAt(i + 1);
+      if (next < 0xdc00 || next > 0xdfff) return false;
+      i++;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Fast check for whether a single character (or surrogate pair) can be losslessly represented in target encoding. */
+export function canEncodeChar(ch: string, encoding: string): boolean {
+  if (!isWellFormed(ch)) return false;
+  try {
+    const b = iconv.encode(ch, encoding);
+    return iconv.decode(b, encoding, { stripBOM: false }) === ch;
+  } catch {
+    return false;
+  }
+}
+
+/** Check whether all code points in text can be losslessly represented in the target encoding via round-trip verification. */
 export function canEncodeAll(text: string, encoding: string): boolean {
-  const buf = iconv.encode(text, encoding);
-  if (!buf.includes(0x3f)) return true;
-  return iconv.decode(buf, encoding) === text;
+  if (!isWellFormed(text)) return false;
+  try {
+    const buf = iconv.encode(text, encoding);
+    return iconv.decode(buf, encoding, { stripBOM: false }) === text;
+  } catch {
+    return false;
+  }
 }
 
 /** Collect code points in text that cannot be losslessly encoded in the target encoding. */
 export function unmappableChars(text: string, encoding: string): string[] {
   const bad: string[] = [];
+  const seen = new Set<string>();
   for (const ch of text) {
-    if (ch === "?") continue;
-    const b = iconv.encode(ch, encoding);
-    if (b.includes(0x3f) || iconv.decode(b, encoding) !== ch) {
-      if (!bad.includes(ch)) bad.push(ch);
-    }
+    if (seen.has(ch)) continue;
+    seen.add(ch);
+    if (!canEncodeChar(ch, encoding)) bad.push(ch);
   }
   return bad;
 }
@@ -169,10 +202,15 @@ export function charListMessage(chars: string[]): string {
 export function escapeUnmappable(text: string, encoding: string): string {
   if (canEncodeAll(text, encoding)) return text;
   let out = "";
+  // Local to this conversion: repeated source characters need only one codec round trip.
+  const encodable = new Map<string, boolean>();
   for (const ch of text) {
-    const b = iconv.encode(ch, encoding);
-    const lossy = b.includes(0x3f) || iconv.decode(b, encoding) !== ch;
-    if (!lossy) {
+    let supported = encodable.get(ch);
+    if (supported === undefined) {
+      supported = canEncodeChar(ch, encoding);
+      encodable.set(ch, supported);
+    }
+    if (supported) {
       out += ch;
       continue;
     }

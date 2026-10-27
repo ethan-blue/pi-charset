@@ -1,6 +1,6 @@
 // In-memory queue for non-fatal encoding and gate notices:
 // Notices are queued by operations and drained in the tool_result hook so they never enter file content on disk.
-import * as path from "node:path";
+import { normalizePathKey } from "./path-key";
 
 const MAX_FILES_TRACKED = 256;
 const MAX_NOTES_PER_FILE = 6;
@@ -8,7 +8,7 @@ const MAX_NOTES_PER_FILE = 6;
 const pending = new Map<string, string[]>();
 
 function key(absPath: string): string {
-  return path.resolve(absPath).toLowerCase();
+  return normalizePathKey(absPath);
 }
 
 export function pushEncodingNote(absPath: string, message: string): void {

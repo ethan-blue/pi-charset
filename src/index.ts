@@ -18,8 +18,9 @@ import {
 import { createEncodingGrepDefinition } from "./grep";
 import { wrapEditToolWithEncodingPreview, clearUtf8Cache } from "./edit-preview";
 import { clearConfigCache, findNearestConfigSync, shellRuleFor, CONFIG_FILENAME } from "./config";
+import { clearClassifyCache } from "./encoding/classify";
 import { readPiShellSettings } from "./pi-settings";
-import { makeTranscodingShellOperations } from "./shell";
+import { makeTranscodingShellOperations, _resetOsEncodingCache } from "./shell";
 import { systemNoteFor } from "./sysnote";
 import { clearEncodingNotes, drainEncodingNotes, drainShellNotes, pushEncodingNote, notesToSuffix } from "./notify";
 import { PLUGIN_VERSION } from "./version";
@@ -33,8 +34,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(createWriteToolDefinition(cwd, { operations: makeWriteOperations() }));
 
   // Wrap edit's renderCall so non-UTF-8 files get an encoding-aware preview diff.
-  const editDef = createEditToolDefinition(cwd, { operations: makeEditOperations() });
-  pi.registerTool(wrapEditToolWithEncodingPreview(editDef, makeEditOperations(), cwd));
+  const editOps = makeEditOperations();
+  const editDef = createEditToolDefinition(cwd, { operations: editOps });
+  pi.registerTool(wrapEditToolWithEncodingPreview(editDef, editOps, cwd));
 
   pi.registerTool(createEncodingGrepDefinition(cwd));
 
@@ -79,26 +81,31 @@ export default function (pi: ExtensionAPI) {
     for (const w of shellRule.warnings) pushEncodingNote(cwd, w);
   }
 
-  pi.on("session_start", async () => {
-    clearConfigCache();
-    clearUtf8Cache();
-    clearEncodingNotes();
-    clearReadBaselines();
-  });
-  pi.on("resources_discover", async (event) => {
-    if (event.reason === "reload") {
-      clearConfigCache();
-      clearUtf8Cache();
-      clearEncodingNotes();
-      clearReadBaselines();
-    }
-  });
-
   let notePromise: Promise<string | null> | null = null;
   const noteOnce = () => {
     if (!notePromise) notePromise = systemNoteFor(cwd);
     return notePromise;
   };
+
+  const resetAllCaches = () => {
+    clearConfigCache();
+    clearUtf8Cache();
+    clearEncodingNotes();
+    clearReadBaselines();
+    clearClassifyCache();
+    _resetOsEncodingCache();
+    notePromise = null;
+  };
+
+  pi.on("session_start", async () => {
+    resetAllCaches();
+  });
+  pi.on("resources_discover", async (event) => {
+    if (event.reason === "reload") {
+      resetAllCaches();
+    }
+  });
+
   pi.on("before_agent_start", async (event) => {
     const note = await noteOnce();
     if (!note) return undefined;

@@ -5,6 +5,7 @@ import type { ShellTranscodeRule } from "./config";
 import { createOutputTranscoder, type TranscodeStats } from "./encoding/stream-transcode";
 import { resolveReadPlan } from "./resolve";
 import { pushShellNote } from "./notify";
+import { isSupportedEncoding, normalizeEncoding } from "./encoding/converter";
 
 export interface ShellOperationsLike {
   exec: (
@@ -27,11 +28,8 @@ export function lastShellTranscodeStats(): TranscodeStats | null {
 const CODEPAGE_TO_ICONV: Record<number, string | null> = {
   65001: null,
   936: "GB18030",
-  2052: "GB18030",
   950: "Big5",
-  2053: "Big5",
   932: "CP932",
-  2054: "Big5-HKSCS",
   949: "CP949",
   1252: "windows-1252",
   1250: "windows-1250",
@@ -54,19 +52,31 @@ export function osConsoleEncoding(): string | null {
       const out = execFileSync("chcp.com", [], { encoding: "latin1", timeout: 5000, windowsHide: true });
       const m = /(\d{3,5})/.exec(out);
       const cp = m ? Number(m[1]) : NaN;
-      osEncodingCache = Number.isFinite(cp) ? (CODEPAGE_TO_ICONV[cp] ?? null) : null;
+      const rawEnc = Number.isFinite(cp) ? (CODEPAGE_TO_ICONV[cp] ?? null) : null;
+      osEncodingCache = rawEnc && isSupportedEncoding(rawEnc) ? normalizeEncoding(rawEnc) : null;
     } catch {
       osEncodingCache = null;
     }
   } else {
     const loc = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || "";
     const charset = (loc.split(".")[1] || "").split("@")[0].toUpperCase();
-    if (!charset || charset === "UTF-8" || charset === "UTF8") osEncodingCache = null;
-    else if (charset === "GBK" || charset === "GB2312" || charset === "GB18030") osEncodingCache = "GB18030";
-    else if (charset === "BIG5") osEncodingCache = "Big5";
-    else if (charset === "EUC-KR") osEncodingCache = "CP949";
-    else if (charset === "SHIFTJIS" || charset === "SJIS") osEncodingCache = "CP932";
-    else osEncodingCache = charset;
+    if (!charset || charset === "UTF-8" || charset === "UTF8") {
+      osEncodingCache = null;
+    } else {
+      let resolved: string | null = null;
+      if (charset === "GBK" || charset === "GB2312" || charset === "GB18030") resolved = "GB18030";
+      else if (charset === "BIG5") resolved = "Big5";
+      else if (charset === "EUC-KR") resolved = "CP949";
+      else if (charset === "SHIFTJIS" || charset === "SJIS") resolved = "CP932";
+      else {
+        try {
+          resolved = normalizeEncoding(charset);
+        } catch {
+          resolved = null;
+        }
+      }
+      osEncodingCache = resolved && isSupportedEncoding(resolved) ? resolved : null;
+    }
   }
   return osEncodingCache;
 }

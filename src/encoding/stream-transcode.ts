@@ -97,18 +97,26 @@ export function createOutputTranscoder(opts: OutputTranscoderOptions): OutputTra
     } else if (v.kind === "cjk") {
       enc = v.encoding;
       basis = `字节判定为 ${enc}（候选互校）`;
+    } else if (v.kind === "config") {
+      enc = v.encoding;
+      basis = `按配置编码 ${enc} 转码`;
     } else if (opts.fallbackEncoding) {
       enc = opts.fallbackEncoding;
       basis = `字节未判定，回退至 ${enc}`;
     }
-    if (!enc) {
-      emitRaw("binary-passthrough", "无可用目标编码，原样透传");
+    if (!enc || !iconv.encodingExists(enc)) {
+      emitRaw("binary-passthrough", enc ? `编码 "${enc}" 不受支持，原样透传` : "无可用目标编码，原样透传");
+      return;
+    }
+    try {
+      decoder = iconv.getDecoder(enc);
+    } catch {
+      emitRaw("binary-passthrough", `获取编码 "${enc}" 解码器失败，原样透传`);
       return;
     }
     stats.mode = "transcoded";
     stats.encoding = enc;
     stats.basis = basis;
-    decoder = iconv.getDecoder(enc);
     const text = decoder.write(all);
     pushOut(text);
   }

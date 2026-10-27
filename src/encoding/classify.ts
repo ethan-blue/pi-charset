@@ -4,6 +4,7 @@
 import { isAscii, isUtf8 } from "node:buffer";
 import { readFileSync, statSync, promises as fsp } from "node:fs";
 import iconv from "iconv-lite";
+import { normalizePathKey } from "../path-key";
 import {
   AUTO_CJK_CANDIDATES,
   isSingleByteEncoding,
@@ -230,7 +231,7 @@ export async function verdictForBuffer(absPath: string, buf: Buffer, cfg: Classi
 }
 
 function cacheKey(absPath: string, cfg: ClassifyConfig | null): string {
-  return absPath + CFG_SEP + cfgKeyPart(cfg);
+  return normalizePathKey(absPath) + CFG_SEP + cfgKeyPart(cfg);
 }
 
 function store(key: string, st: { mtimeMs: number; size: number }, verdict: Verdict): void {
@@ -245,7 +246,8 @@ export function clearClassifyCache(): void {
 }
 
 export function invalidateClassifyCache(absPath: string): void {
-  for (const k of [...fileCache.keys()]) if (k.split(CFG_SEP)[0] === absPath) fileCache.delete(k);
+  const target = normalizePathKey(absPath);
+  for (const k of [...fileCache.keys()]) if (k.split(CFG_SEP)[0] === target) fileCache.delete(k);
 }
 
 export function describeVerdict(v: Verdict): string {

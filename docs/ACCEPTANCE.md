@@ -8,13 +8,15 @@
 
 ```bash
 npm run typecheck    # tsc --noEmit (0 errors)
-npm test             # vitest run (20 test suites / 264 tests)
+npm test             # vitest run; reports current pass/skip counts
 npm run verify       # typecheck + test
 ```
 
 ---
 
 ## English
+
+The matrix below maps expected behavior to test suites; it is not a live CI report. Use the commands above to verify the current checkout. Check skipped tests as well as failures: host integration and platform-specific cases depend on the installed host and operating system. A green Windows run does not establish POSIX permission or symlink behavior, and a smoke performance threshold is not a latency guarantee.
 
 ### 1. End-to-End Acceptance Matrix (A-01 ~ A-24)
 
@@ -51,6 +53,7 @@ npm run verify       # typecheck + test
 |---|---|
 | `test/classify.test.ts` | 16 fixture classifications, UTF-8 priority, single-byte exclusion, 1MB classification latency & cache |
 | `test/converter.test.ts` | Encoding alias normalization, GB-family detection, unmappable code point detection & `\uXXXX` escaping |
+| `test/regressions.test.ts` | GBK question marks and emoji; UTF-8/UTF-16 line endings and BOM; external deletion and pre-rename conflicts; platform path keys; unsupported shell encodings; Rust regex; POSIX mode/symlink checks (platform-conditional) |
 | `test/config.test.ts` | `.pi-charset.json` nearest-directory lookup, override specificity scoring & validation |
 | `test/resolve.test.ts` | Read/write decision matrix, `writeIntent` resolution, UTF-8 protection, BOM rules, config hot-reload |
 | `test/gates.test.ts` | Gate 1 (`error`/`escape`/`drop-to-gb18030`), Gate 2 (read-back verification preserving disk state), Gate 3 |
@@ -72,6 +75,8 @@ npm run verify       # typecheck + test
 ---
 
 ## 简体中文
+
+下表用于对照预期行为与测试位置，不是当前版本的实时 CI 报告。请运行上方命令验证本次检出代码，并同时查看失败和跳过项：宿主集成测试、平台相关测试受本机环境影响。Windows 测试通过不能证明 POSIX 权限或符号链接行为已实测，性能 smoke 阈值也不代表延迟承诺。
 
 ### 1. 端到端验收矩阵（A-01 ~ A-24）
 
