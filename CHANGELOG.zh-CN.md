@@ -6,6 +6,13 @@
 
 ---
 
+## [0.1.3] - 2026-10-28
+
+### 调整
+
+- 将 `.github/workflows/release.yml` 切换为无密钥 npm OIDC Trusted Publishing（附带 Sigstore Provenance 溯源签名）并自动标记最新 GitHub Release。
+- 更新安装说明与实时版本徽章，将 `pi install npm:pi-charset` 与 `pi update --extensions` 作为首选安装与一键升级路径。
+
 ## [0.1.2] - 2026-10-28
 
 ### 新增

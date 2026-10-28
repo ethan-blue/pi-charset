@@ -13,30 +13,32 @@ English | [简体中文](./zh-CN/INSTALL.md)
 | Runtime Dependencies | `iconv-lite`, `micromatch` (no Python required) |
 | ripgrep | Automatically resolved from `~/.pi/agent/bin/rg(.exe)`, `rg` on `PATH`, or `@vscode/ripgrep` |
 
-## 2. Installation Methods
+## 2. Installation & Updates
 
-### Option A: Install from Git (Recommended)
+### Option A: Install from npm (Recommended)
 
 ```powershell
-# Project-level install (writes to <project>/.pi/settings.json)
-cd D:\path\to\your-project
-pi install git:github.com/ethan-blue/pi-charset -l
-
 # Global user-level install (writes to ~/.pi/agent/settings.json)
+pi install npm:pi-charset
+
+# Project-level install (writes to <project>/.pi/settings.json)
+pi install npm:pi-charset -l
+
+# Upgrade installed packages to the latest release at any time
+pi update --extensions
+```
+
+### Option B: Install from Git
+
+```powershell
+# Unpinned Git install (tracks main via pi update --extensions)
 pi install git:github.com/ethan-blue/pi-charset
 
 # Pin a specific release tag
-pi install git:github.com/ethan-blue/pi-charset@v0.1.2 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.3 -l
 ```
 
 When installing from a `git:` source, Pi clones the repository under `.pi/git/github.com/ethan-blue/pi-charset` (or `~/.pi/agent/git/...`) and runs `npm install` automatically.
-
-### Option B: Install from npm (When Published)
-
-```powershell
-pi install npm:pi-charset -l
-pi install npm:pi-charset@0.1.2 -l
-```
 
 ### Option C: Install from a Local Directory (Offline / Intranet)
 
@@ -91,7 +93,7 @@ Restart Pi after creating `.pi-charset.json`.
 
 ## 4. Post-Install Verification
 
-1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.2` and the active mode or `.pi-charset.json` path.
+1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.3` and the active mode or `.pi-charset.json` path.
 2. Edit a Chinese comment in a GBK file, then run `/charset-scan` (or `node <PKG_DIR>/tools/scan-encoding.mjs <file>`) and verify the file remains `cjk/GBK`.
 3. Optionally scan for pre-existing damaged files (`U+FFFD` or `锟斤拷`):
    ```text

@@ -1,7 +1,7 @@
 # pi-charset
 
 [![CI](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml/badge.svg)](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](https://github.com/ethan-blue/pi-charset/releases)
+[![npm](https://img.shields.io/npm/v/pi-charset.svg)](https://www.npmjs.com/package/pi-charset)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen.svg)](./package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
@@ -58,17 +58,17 @@
 
 ## 快速开始
 
-### 1. 安装
+### 1. 安装与升级
 
 ```bash
-# 从 Git 安装（-l 写入当前项目 .pi/settings.json，不加 -l 写入用户全局配置）
+# 从 npm 全局安装（推荐；加 -l 则仅写入当前工程 .pi/settings.json）
+pi install npm:pi-charset
+
+# 日常一键升级至最新发布版
+pi update --extensions
+
+# 或从 Git 仓库安装
 pi install git:github.com/ethan-blue/pi-charset -l
-
-# 指定版本标签安装
-pi install git:github.com/ethan-blue/pi-charset@v0.1.2 -l
-
-# 或从本地目录安装（需先在扩展目录执行 npm install --omit=dev）
-pi install /path/to/pi-charset -l
 ```
 
 ### 2. 脚手架生成或手动编写 `.pi-charset.json`

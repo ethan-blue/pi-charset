@@ -1,7 +1,7 @@
 # pi-charset
 
 [![CI](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml/badge.svg)](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](https://github.com/ethan-blue/pi-charset/releases)
+[![npm](https://img.shields.io/npm/v/pi-charset.svg)](https://www.npmjs.com/package/pi-charset)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen.svg)](./package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
@@ -58,17 +58,17 @@ Files are classified in memory in a fixed order:
 
 ## Quick Start
 
-### 1. Installation
+### 1. Installation & Updates
 
 ```bash
-# Install from Git (-l writes to project .pi/settings.json; omit -l for global install)
+# Install globally from npm (recommended; omit -l for global, add -l for project .pi/settings.json)
+pi install npm:pi-charset
+
+# Upgrade to the latest release at any time
+pi update --extensions
+
+# Or install directly from Git
 pi install git:github.com/ethan-blue/pi-charset -l
-
-# Pin a specific release tag
-pi install git:github.com/ethan-blue/pi-charset@v0.1.2 -l
-
-# Or install from a local checkout (run npm install --omit=dev in the package directory first)
-pi install /path/to/pi-charset -l
 ```
 
 ### 2. Scaffold or Create `.pi-charset.json`

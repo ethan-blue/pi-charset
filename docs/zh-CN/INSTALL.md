@@ -13,30 +13,32 @@
 | 运行时依赖 | `iconv-lite`、`micromatch`（无 Python 依赖） |
 | ripgrep | 自动查找 `~/.pi/agent/bin/rg(.exe)`、系统 `PATH` 中的 `rg` 或 `@vscode/ripgrep` |
 
-## 2. 安装方式
+## 2. 安装与升级
 
-### 方式 A：从 Git 仓库安装（推荐）
+### 方式 A：从 npm 官方源安装（推荐）
 
 ```powershell
-# 项目级安装（写入当前工程 .pi/settings.json）
-cd D:\path\to\your-project
-pi install git:github.com/ethan-blue/pi-charset -l
+# 用户级全局安装（写入 ~/.pi/agent/settings.json，所有工程自动生效）
+pi install npm:pi-charset
 
-# 用户级全局安装（写入 ~/.pi/agent/settings.json）
+# 项目级安装（写入当前工程 .pi/settings.json）
+pi install npm:pi-charset -l
+
+# 日常一键升级已安装扩展至最新版本
+pi update --extensions
+```
+
+### 方式 B：从 Git 仓库安装
+
+```powershell
+# 不锁版本安装（后续可通过 pi update --extensions 跟踪最新提交）
 pi install git:github.com/ethan-blue/pi-charset
 
 # 指定版本标签安装
-pi install git:github.com/ethan-blue/pi-charset@v0.1.2 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.3 -l
 ```
 
 使用 `git:` 源安装时，Pi 会将仓库克隆至 `.pi/git/github.com/ethan-blue/pi-charset`（或 `~/.pi/agent/git/...`）并自动执行 `npm install`。
-
-### 方式 B：从 npm 安装（发布至 npm 后可用）
-
-```powershell
-pi install npm:pi-charset -l
-pi install npm:pi-charset@0.1.2 -l
-```
 
 ### 方式 C：从本地目录安装（离线或内网环境）
 
@@ -91,7 +93,7 @@ node <PKG_DIR>/tools/scan-encoding.mjs . --init
 
 ## 4. 安装后验证
 
-1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.2` 及生效的模式或 `.pi-charset.json` 路径。
+1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.3` 及生效的模式或 `.pi-charset.json` 路径。
 2. **读写验证**：修改工程内一个 GBK 文件的中文注释，执行 `/charset-scan`（或 `node <PKG_DIR>/tools/scan-encoding.mjs <文件路径>`），确认编码仍为 `cjk/GBK`。
 3. **历史受损文件排查（可选）**：
    ```text

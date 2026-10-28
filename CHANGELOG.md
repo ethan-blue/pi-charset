@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.1.3] - 2026-10-28
+
+### Changed
+
+- Configure `.github/workflows/release.yml` for tokenless npm OIDC Trusted Publishing with Sigstore provenance attestations and automatic `--latest` GitHub Release promotion.
+- Update installation guides and badges to recommend `pi install npm:pi-charset` and `pi update --extensions` as the primary installation and upgrade path.
+
 ## [0.1.2] - 2026-10-28
 
 ### Added

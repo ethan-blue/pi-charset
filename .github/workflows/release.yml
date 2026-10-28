@@ -38,6 +38,34 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  npm-publish:
+    needs: verify
+    if: vars.ENABLE_NPM_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Ensure npm supports OIDC Trusted Publishing
+        run: |
+          npm --version
+          node -e 'const [maj,min]=process.argv[1].split(".").map(Number); process.exit(maj>11||(maj===11&&min>=6)?0:1)' "$(npm --version)" || npm install -g npm@^11.6.0
+
+      - run: npm ci
+      - run: npm publish --provenance --access public
+
   github-release:
     needs: verify
     runs-on: ubuntu-latest
@@ -66,34 +94,8 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md --latest
             gh release upload "$TAG" pi-charset-*.tgz --clobber
           else
-            gh release create "$TAG" pi-charset-*.tgz --title "$TAG" --notes-file release-notes.md --verify-tag
+            gh release create "$TAG" pi-charset-*.tgz --title "$TAG" --notes-file release-notes.md --verify-tag --latest
           fi
-
-  npm-publish:
-    needs: verify
-    if: vars.ENABLE_NPM_PUBLISH == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          registry-url: "https://registry.npmjs.org"
-          cache: npm
-
-      - run: npm ci
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
