@@ -83,11 +83,44 @@ describe("宿主与插件版本核对", () => {
 });
 
 describe("扩展注册与工具调用", () => {
-  it("注册 read/write/edit/grep 四工具与 /charset-status 命令", () => {
+  it("注册 read/write/edit/grep 四工具与 /charset-status、/charset-init、/charset-scan 命令", () => {
     const { piStub, tools, commands } = makeFakePi();
     register(piStub as never);
     expect([...tools.keys()].sort()).toEqual(["edit", "grep", "read", "write"]);
-    expect(commands.has("charset-status")).toBe(true);
+    expect([...commands.keys()].sort()).toEqual(["charset-init", "charset-scan", "charset-status"]);
+  });
+
+  it("/charset-init 支持预设模板与自动扫描脚手架，并拒绝无 --force 覆盖", async () => {
+    const { piStub, commands } = makeFakePi();
+    register(piStub as never);
+
+    const previewNotes: string[] = [];
+    await commands.get("charset-init")!.handler("embedded-c --dry-run", {
+      ui: { notify: (m: string) => previewNotes.push(m) },
+    });
+    expect(previewNotes.join("\n")).toContain("embedded-c");
+    expect(existsSync(join(root, ".pi-charset.json"))).toBe(false);
+
+    const writeNotes: string[] = [];
+    await commands.get("charset-init")!.handler("embedded-c", {
+      ui: { notify: (m: string) => writeNotes.push(m) },
+    });
+    expect(existsSync(join(root, ".pi-charset.json"))).toBe(true);
+    expect(readFileSync(join(root, ".pi-charset.json"), "utf-8")).toContain("src/**/*.c");
+
+    const dupNotes: { msg: string; level: string }[] = [];
+    await commands.get("charset-init")!.handler("all-utf8", {
+      ui: { notify: (msg: string, level: string) => dupNotes.push({ msg, level }) },
+    });
+    expect(dupNotes[0]?.level).toBe("warning");
+    expect(readFileSync(join(root, ".pi-charset.json"), "utf-8")).toContain("src/**/*.c");
+
+    writeFileSync(join(root, "legacy.c"), iconv.encode("/* 中文注释 */\r\nint x = 1;\r\n", "gbk"));
+    const scanNotes: string[] = [];
+    await commands.get("charset-scan")!.handler("--ext c", {
+      ui: { notify: (m: string) => scanNotes.push(m) },
+    });
+    expect(scanNotes.join("\n")).toContain("扫描根目录");
   });
 
   it("read -> edit -> read：GBK 文件中文替换并保持 GBK/CRLF", async () => {

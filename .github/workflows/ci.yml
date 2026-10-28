@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     strategy:
@@ -30,5 +37,6 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run check:release
       - run: npm run typecheck
       - run: npm test

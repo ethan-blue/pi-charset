@@ -4,4 +4,3 @@ node_modules/
 
 # Generated test fixtures (built from test/fixtures/build.ts via npm run fixtures)
 test/fixtures/out/
-.alma-snapshots

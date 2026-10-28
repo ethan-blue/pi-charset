@@ -14,6 +14,7 @@
     "url": "https://github.com/ethan-blue/pi-charset/issues"
   },
   "keywords": [
+    "pi",
     "pi-package",
     "pi-extension",
     "charset",
@@ -34,12 +35,16 @@
   },
   "files": [
     "src",
+    "skills",
+    "prompts",
     "README.md",
+    "README.zh-CN.md",
     "CHANGELOG.md",
+    "CHANGELOG.zh-CN.md",
     "LICENSE",
-    "docs/*.md",
+    "docs/**/*.md",
     "examples",
-    "tools/*.mjs"
+    "tools/scan-encoding.mjs"
   ],
   "publishConfig": {
     "access": "public"
@@ -48,9 +53,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run test",
+    "check:release": "node tools/check-release.mjs",
+    "verify": "npm run typecheck && npm run test && npm run check:release",
     "fixtures": "node test/fixtures/gen.ts",
     "scan": "node tools/scan-encoding.mjs",
+    "version": "node tools/sync-version.mjs && git add src/version.ts README.md README.zh-CN.md",
     "prepublishOnly": "npm run verify"
   },
   "peerDependencies": {
@@ -75,6 +82,12 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
+    ],
+    "skills": [
+      "./skills/charset-rules"
+    ],
+    "prompts": [
+      "./prompts/charset-setup.md"
     ]
   }
 }
