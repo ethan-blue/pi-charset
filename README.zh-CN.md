@@ -1,7 +1,7 @@
 # pi-charset
 
 [![CI](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml/badge.svg)](https://github.com/ethan-blue/pi-charset/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/ethan-blue/pi-charset/releases)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](https://github.com/ethan-blue/pi-charset/releases)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen.svg)](./package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
