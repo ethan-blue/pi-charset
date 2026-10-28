@@ -1,6 +1,6 @@
 {
   "name": "pi-charset",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Encoding-aware read, write, edit, and grep extension for Pi",
   "type": "module",
   "license": "MIT",
