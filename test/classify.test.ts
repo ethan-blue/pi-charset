@@ -83,6 +83,31 @@ describe("classifyBuffer 样本分类", () => {
     expect(implicit.configReason).toBe("undecidable");
   });
 
+  it("rejects invalid UTF-8 after a BOM without rejecting valid replacement characters", () => {
+    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    for (const tail of [[0x61, 0xff, 0x62], [0xe4, 0xb8], [0x80]]) {
+      expect(classifyBuffer(Buffer.concat([bom, Buffer.from(tail)])).kind).toBe("unknown");
+    }
+    expect(classifyBuffer(bom).kind).toBe("utf8-bom");
+    expect(classifyBuffer(Buffer.concat([bom, Buffer.from("a\ufffdb")])).kind).toBe("utf8-bom");
+  });
+
+  it("rejects malformed UTF-16 BOM bodies: odd length and unpaired surrogates", () => {
+    const leBom = Buffer.from([0xff, 0xfe]);
+    const beBom = Buffer.from([0xfe, 0xff]);
+    // Truncated final code unit (odd body length).
+    expect(classifyBuffer(Buffer.concat([leBom, Buffer.from([0x61, 0x00, 0x00])])).kind).toBe("unknown");
+    // Orphan lead surrogate at end of body (LE).
+    expect(classifyBuffer(Buffer.concat([leBom, Buffer.from([0x00, 0xd8])])).kind).toBe("unknown");
+    // Trail surrogate without a lead (LE).
+    expect(classifyBuffer(Buffer.concat([leBom, Buffer.from([0x00, 0xdc])])).kind).toBe("unknown");
+    // Orphan lead surrogate (BE).
+    expect(classifyBuffer(Buffer.concat([beBom, Buffer.from([0xd8, 0x00])])).kind).toBe("unknown");
+    // Valid surrogate pair (U+1F600 in LE) and valid BMP text still pass.
+    expect(classifyBuffer(Buffer.concat([leBom, Buffer.from([0x3d, 0xd8, 0x00, 0xde])])).kind).toBe("utf16le");
+    expect(classifyBuffer(Buffer.concat([beBom, iconv.encode("中文", "UTF-16BE")])).kind).toBe("utf16be");
+  });
+
   it("记录 BOM 标记", () => {
     expect(classifyBuffer(buf("utf8bom.txt"), null).bom).toBe(true);
     expect(classifyBuffer(buf("utf16le.txt"), null).bom).toBe(true);

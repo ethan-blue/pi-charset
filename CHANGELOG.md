@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.1.4] - 2026-10-28
+
+### Fixed
+
+- Validate the body of UTF-8 BOM files with strict UTF-8 checking; a BOM followed by invalid or truncated sequences now classifies as UNKNOWN and is rejected for writing instead of being treated as valid UTF-8.
+- Validate UTF-16 BOM bodies: odd byte lengths and unpaired surrogates classify as UNKNOWN instead of being loss-decoded on read and written back with dropped or replaced units.
+- `force: true` no longer bypasses write rejection for files whose own BOM contradicts their bytes, and writes to UNKNOWN files containing U+FFFD are rejected to avoid baking replacement characters into damaged files.
+- UTF-16 forced conversions now emit the target endianness's BOM (LE<->BE) instead of dropping it.
+
 ## [0.1.3] - 2026-10-28
 
 ### Changed

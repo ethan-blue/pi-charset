@@ -102,6 +102,25 @@ function normalizeCandidates(list: string[] | undefined): string[] {
   return out.length ? out : [...DEFAULT_AUTO_CANDIDATES];
 }
 
+/** Check that a UTF-16 byte body is well-formed: even length and no unpaired surrogate code units. */
+function isValidUtf16Body(body: Buffer, littleEndian: boolean): boolean {
+  if (body.length % 2 !== 0) return false;
+  const unitAt = (i: number) =>
+    littleEndian ? body[i]! | (body[i + 1]! << 8) : (body[i]! << 8) | body[i + 1]!;
+  for (let i = 0; i < body.length; i += 2) {
+    const unit = unitAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      if (i + 4 > body.length) return false;
+      const next = unitAt(i + 2);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      i += 2;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function configVerdict(b: Buffer, enc: string, reason: "force" | "undecidable"): Verdict {
   return {
     kind: "config",
@@ -120,14 +139,23 @@ export function classifyBuffer(B: Buffer, cfg: ClassifyConfig | null = null): Ve
     return { kind: "utf8", encoding: "UTF-8", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: false };
   }
   // Check UTF-32 BOM before UTF-16LE (FF FE) and classify UTF-32 as binary.
-  if (startsWith(B, [0xef, 0xbb, 0xbf]))
+  if (startsWith(B, [0xef, 0xbb, 0xbf])) {
+    if (!isValidUtf8Strict(B.subarray(3)))
+      return { kind: "unknown", encoding: "UNKNOWN", ambiguous: false, hasFffd: true, candidates: [], exhaustive: true, bom: true };
     return { kind: "utf8-bom", encoding: "UTF-8", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: true };
+  }
   if (startsWith(B, [0xff, 0xfe, 0x00, 0x00]) || startsWith(B, [0x00, 0x00, 0xfe, 0xff]))
     return { kind: "binary", encoding: "BINARY", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: false };
-  if (startsWith(B, [0xff, 0xfe]))
+  if (startsWith(B, [0xff, 0xfe])) {
+    if (!isValidUtf16Body(B.subarray(2), true))
+      return { kind: "unknown", encoding: "UNKNOWN", ambiguous: false, hasFffd: true, candidates: [], exhaustive: true, bom: true };
     return { kind: "utf16le", encoding: "UTF-16LE", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: true };
-  if (startsWith(B, [0xfe, 0xff]))
+  }
+  if (startsWith(B, [0xfe, 0xff])) {
+    if (!isValidUtf16Body(B.subarray(2), false))
+      return { kind: "unknown", encoding: "UNKNOWN", ambiguous: false, hasFffd: true, candidates: [], exhaustive: true, bom: true };
     return { kind: "utf16be", encoding: "UTF-16BE", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: true };
+  }
 
   if (containsNul(B))
     return { kind: "binary", encoding: "BINARY", ambiguous: false, hasFffd: false, candidates: [], exhaustive: true, bom: false };

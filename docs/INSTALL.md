@@ -35,7 +35,7 @@ pi update --extensions
 pi install git:github.com/ethan-blue/pi-charset
 
 # Pin a specific release tag
-pi install git:github.com/ethan-blue/pi-charset@v0.1.3 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.4 -l
 ```
 
 When installing from a `git:` source, Pi clones the repository under `.pi/git/github.com/ethan-blue/pi-charset` (or `~/.pi/agent/git/...`) and runs `npm install` automatically.
@@ -93,7 +93,7 @@ Restart Pi after creating `.pi-charset.json`.
 
 ## 4. Post-Install Verification
 
-1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.3` and the active mode or `.pi-charset.json` path.
+1. Run `/charset-status` in Pi to confirm `pi-charset v0.1.4` and the active mode or `.pi-charset.json` path.
 2. Edit a Chinese comment in a GBK file, then run `/charset-scan` (or `node <PKG_DIR>/tools/scan-encoding.mjs <file>`) and verify the file remains `cjk/GBK`.
 3. Optionally scan for pre-existing damaged files (`U+FFFD` or `锟斤拷`):
    ```text

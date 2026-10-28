@@ -35,7 +35,7 @@ pi update --extensions
 pi install git:github.com/ethan-blue/pi-charset
 
 # 指定版本标签安装
-pi install git:github.com/ethan-blue/pi-charset@v0.1.3 -l
+pi install git:github.com/ethan-blue/pi-charset@v0.1.4 -l
 ```
 
 使用 `git:` 源安装时，Pi 会将仓库克隆至 `.pi/git/github.com/ethan-blue/pi-charset`（或 `~/.pi/agent/git/...`）并自动执行 `npm install`。
@@ -93,7 +93,7 @@ node <PKG_DIR>/tools/scan-encoding.mjs . --init
 
 ## 4. 安装后验证
 
-1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.3` 及生效的模式或 `.pi-charset.json` 路径。
+1. **状态检查**：在 Pi 会话中输入 `/charset-status`，确认显示 `pi-charset v0.1.4` 及生效的模式或 `.pi-charset.json` 路径。
 2. **读写验证**：修改工程内一个 GBK 文件的中文注释，执行 `/charset-scan`（或 `node <PKG_DIR>/tools/scan-encoding.mjs <文件路径>`），确认编码仍为 `cjk/GBK`。
 3. **历史受损文件排查（可选）**：
    ```text

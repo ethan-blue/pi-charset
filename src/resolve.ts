@@ -182,6 +182,36 @@ export async function resolveWritePlan(
     };
   }
   if (verdict.kind === "unknown") {
+    if (rule.force && verdict.bom) {
+      // A BOM is the file's own encoding declaration; a body that fails to decode under it means the
+      // on-disk bytes are damaged. force declares an encoding for undecidable files, not a repair tool.
+      return {
+        encoding: null,
+        rule,
+        kind: "unknown",
+        verdict,
+        addBom: "",
+        reject:
+          `拒绝写入 ${absFilePath}：文件带 BOM 但按该编码校验失败（磁盘字节已损坏或被截断）。` +
+          `"force": true 不能覆盖文件自身的 BOM 声明；请先修复文件或人工确认实际编码后重试。`,
+        warnings,
+        transcoding: false,
+      };
+    }
+    if (rule.force && content.includes("\ufffd")) {
+      return {
+        encoding: null,
+        rule,
+        kind: "unknown",
+        verdict,
+        addBom: "",
+        reject:
+          `拒写 ${absFilePath}：待写入内容含 U+FFFD（替换字符），写入将把原始损坏字节永久固化为替换字符。` +
+          `请先核对文件真实内容后再修改。`,
+        warnings,
+        transcoding: false,
+      };
+    }
     if (rule.force) {
       warnings.push(`force=true 跳过 unknown 判定，按 ${targetFromConfig} 写出`);
       return {
@@ -260,7 +290,10 @@ export async function resolveWritePlan(
       rule,
       kind: verdict.kind,
       verdict,
-      addBom: forceConvert ? "" : (encoding === "UTF-16LE" ? "utf16le" : "utf16be"),
+      // Cross-endian conversion (LE<->BE) must carry the target encoding's BOM; other targets carry no BOM.
+      addBom: forceConvert
+        ? (encoding.toUpperCase() === "UTF-16LE" ? "utf16le" : encoding.toUpperCase() === "UTF-16BE" ? "utf16be" : "")
+        : (encoding === "UTF-16LE" ? "utf16le" : "utf16be"),
       reject: null,
       warnings,
       transcoding: forceConvert,

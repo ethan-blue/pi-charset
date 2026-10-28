@@ -20,6 +20,33 @@ afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 const content = "int a = b ? c : d; // 中文 😀\n";
 
 describe("encoding safety regressions", () => {
+  it("force cannot bypass write rejection for a corrupted BOM file", async () => {
+    putConfig(root, { sourceEncoding: "UTF-8", overrides: [{ pattern: "*.txt", encoding: "UTF-8", force: true }] });
+    const p = join(root, "bad-bom.txt");
+    const original = Buffer.from([0xef, 0xbb, 0xbf, 0x61, 0xff, 0x62]);
+    writeFileSync(p, original);
+    await expect(makeWriteOperations().writeFile(p, "a\ufffdb")).rejects.toThrow(/BOM/);
+    expect(readFileSync(p)).toEqual(original);
+  });
+
+  it("force conversion between UTF-16 endiannesses writes the target BOM", async () => {
+    putConfig(root, { sourceEncoding: "UTF-16BE", overrides: [{ pattern: "wide.txt", encoding: "UTF-16BE", force: true }] });
+    const p = join(root, "wide.txt");
+    writeFileSync(p, Buffer.concat([Buffer.from([0xff, 0xfe]), iconv.encode("中文\r\n", "UTF-16LE")]));
+    await makeWriteOperations().writeFile(p, "中文\n");
+    const out = readFileSync(p);
+    expect(out.subarray(0, 2)).toEqual(Buffer.from([0xfe, 0xff]));
+    expect(iconv.decode(out.subarray(2), "UTF-16BE")).toBe("中文\r\n");
+  });
+
+  it.each([false, true])("rejects invalid UTF-8 BOM writes and preserves bytes (config=%s)", async (configured) => {
+    if (configured) putConfig(root, { sourceEncoding: "UTF-8" });
+    const p = join(root, "invalid-bom.txt");
+    const original = Buffer.from([0xef, 0xbb, 0xbf, 0x61, 0xff, 0x62]);
+    writeFileSync(p, original);
+    await expect(makeWriteOperations().writeFile(p, "a\ufffdb")).rejects.toThrow(/UNKNOWN/);
+    expect(readFileSync(p)).toEqual(original);
+  });
   it("escapes only unsupported characters in an actual GBK write", async () => {
     putConfig(root, { sourceEncoding: "GBK", writeEncoding: "GBK", unmappable: "escape" });
     const p = join(root, "a.c");
